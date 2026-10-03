@@ -1,0 +1,43 @@
+# World Radio
+
+A single-page globe tuner for live internet radio.
+
+Drag or swipe the Earth, use the latitude/longitude tuning knobs, then jump to the nearest available station. You can also choose a random station and filter the directory by genre, country, or language.
+
+## Features
+
+- Interactive 3D Earth with mouse, touch, and pinch controls
+- Rotary latitude and longitude tuning knobs
+- Nearest-station search using station coordinates
+- Random-station discovery
+- Genre, country, and language filters
+- Automatic stream fallback when a station fails
+- HLS playback support through hls.js
+- Responsive layout for desktop, tablet, and mobile
+- No build step; deploy directly with GitHub Pages
+
+## Data and libraries
+
+Station data comes from the community-maintained [Radio Browser](https://www.radio-browser.info/) directory. The globe is rendered with [Globe.GL](https://globe.gl/).
+
+## Run locally
+
+Because browsers restrict some network requests from `file://` pages, serve the folder over HTTP:
+
+```bash
+python3 -m http.server 8080
+```
+
+Then open `http://localhost:8080`.
+
+## Publish with GitHub Pages
+
+In the repository, open **Settings → Pages**, choose **Deploy from a branch**, select `main` and `/ (root)`, then save.
+
+The site will be available at:
+
+`https://mattsimoto.github.io/world-radio/`
+
+## Browser playback note
+
+GitHub Pages is HTTPS. Browsers block radio streams that are available only over plain HTTP, so World Radio prioritizes HTTPS streams and automatically tries another matching station when a stream cannot be played. Some stations may also reject browser playback or require formats a particular browser does not support.
