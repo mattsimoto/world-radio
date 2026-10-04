@@ -87,9 +87,8 @@ button { color: inherit; }
 
 .radio-deck {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.65fr);
-  gap: 18px;
-  min-height: calc(100dvh - 86px);
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
   padding-top: 18px;
 }
 
@@ -103,7 +102,9 @@ button { color: inherit; }
 .globe-panel {
   position: relative;
   overflow: hidden;
-  min-height: 720px;
+  width: 100%;
+  height: clamp(430px, 58vw, 720px);
+  min-height: 430px;
   background:
     radial-gradient(circle at 50% 50%, rgba(34, 70, 91, 0.2), transparent 38%),
     #050a0e;
@@ -191,10 +192,10 @@ button { color: inherit; }
 .map-credit:hover { color: rgba(255,255,255,0.7); }
 
 .control-panel {
-  padding: 22px;
+  padding: 14px 18px 18px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
   min-width: 0;
 }
 
@@ -443,31 +444,34 @@ button { color: inherit; }
 
 .tuning-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  padding: 2px 0;
+  width: min(620px, 100%);
+  margin: 0 auto;
 }
 
 .action-button {
-  min-height: 62px;
-  border-radius: 15px;
+  min-height: 48px;
+  border-radius: 13px;
   border: 1px solid var(--line-bright);
   background: #111d24;
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
+  flex-direction: row;
   justify-content: center;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+  padding: 0 14px;
   cursor: pointer;
-  font: 800 10px/1.1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 800 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
   letter-spacing: 0.07em;
+  white-space: nowrap;
   transition: transform .15s ease, border-color .15s ease, background .15s ease;
 }
 .action-button:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.42); }
 .action-button:active { transform: translateY(1px); }
 .action-button:disabled { cursor: wait; opacity: 0.56; }
 .action-button.primary { background: var(--orange); color: #171009; border-color: #ff9d45; box-shadow: 0 7px 28px rgba(255, 138, 36, 0.2); }
-.button-icon { font-size: 19px; line-height: 1; }
+.button-icon { font-size: 16px; line-height: 1; }
 
 .player-strip {
   display: grid;
@@ -508,8 +512,6 @@ button { color: inherit; }
 .notice.success { color: var(--green); }
 
 @media (max-width: 1040px) {
-  .radio-deck { grid-template-columns: 1fr; }
-  .globe-panel { min-height: min(66vh, 700px); }
   .control-panel { min-height: auto; }
 }
 
@@ -521,15 +523,14 @@ button { color: inherit; }
   .globe-panel, .control-panel { border-radius: 20px; }
   .globe-panel {
     width: 100%;
-    min-height: 340px;
-    height: clamp(340px, 88vw, 520px);
-    aspect-ratio: 1 / 1;
+    min-height: 320px;
+    height: clamp(320px, 86vw, 480px);
     contain: layout paint;
   }
   .globe-stage {
     width: 100%;
     height: 100%;
-    min-height: 340px;
+    min-height: 320px;
   }
   .control-panel { padding: 15px; gap: 15px; }
   .station-card { grid-template-columns: 70px minmax(0, 1fr); gap: 12px; min-height: 90px; }
@@ -542,8 +543,9 @@ button { color: inherit; }
   .reel-window { height: 70px; }
   .reel-current { font-size: 10px; }
   .dial-reset { width: 19px; height: 19px; font-size: 13px; }
-  .tuning-actions { grid-template-columns: 1fr; gap: 8px; }
-  .action-button { min-height: 58px; font-size: 8px; }
+  .tuning-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; width: 100%; }
+  .action-button { min-height: 44px; padding: 0 8px; font-size: 7.5px; gap: 5px; }
+  .button-icon { font-size: 14px; }
   .player-strip { grid-template-columns: 48px minmax(0, 1fr); }
   .volume-control { grid-column: 1 / -1; grid-template-columns: 30px 1fr; }
   .globe-hint { bottom: 12px; font-size: 7px; }
