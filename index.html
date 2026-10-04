@@ -57,7 +57,7 @@
 
         <div class="filter-grid reel-grid" aria-label="Station filters">
           <div class="filter-control">
-            <div class="filter-label-row"><span class="filter-label">GENRE</span><button class="dial-reset" type="button" data-reset-filter="genre" aria-label="Reset genre filter">↺</button></div>
+            <div class="filter-label-row"><span class="filter-label">GENRE</span><button class="dial-reset" type="button" title="Reset" data-reset-filter="genre" aria-label="Reset genre filter"><span aria-hidden="true">×</span></button></div>
             <div class="filter-reel" data-select="genreFilter" tabindex="0" role="spinbutton" aria-label="Genre">
               <button class="reel-step reel-up" type="button" aria-label="Previous genre">▲</button>
               <div class="reel-window" data-reel-window>
@@ -71,7 +71,7 @@
           </div>
 
           <div class="filter-control">
-            <div class="filter-label-row"><span class="filter-label">COUNTRY</span><button class="dial-reset" type="button" data-reset-filter="country" aria-label="Reset country filter">↺</button></div>
+            <div class="filter-label-row"><span class="filter-label">COUNTRY</span><button class="dial-reset" type="button" title="Reset" data-reset-filter="country" aria-label="Reset country filter"><span aria-hidden="true">×</span></button></div>
             <div class="filter-reel" data-select="countryFilter" tabindex="0" role="spinbutton" aria-label="Country">
               <button class="reel-step reel-up" type="button" aria-label="Previous country">▲</button>
               <div class="reel-window" data-reel-window>
@@ -85,7 +85,7 @@
           </div>
 
           <div class="filter-control">
-            <div class="filter-label-row"><span class="filter-label">CITY</span><button class="dial-reset" type="button" data-reset-filter="city" aria-label="Reset city filter">↺</button></div>
+            <div class="filter-label-row"><span class="filter-label">CITY</span><button class="dial-reset" type="button" title="Reset" data-reset-filter="city" aria-label="Reset city filter"><span aria-hidden="true">×</span></button></div>
             <div class="filter-reel is-disabled" data-select="cityFilter" tabindex="0" role="spinbutton" aria-label="City" aria-disabled="true">
               <button class="reel-step reel-up" type="button" aria-label="Previous city" disabled>▲</button>
               <div class="reel-window" data-reel-window>
@@ -99,7 +99,7 @@
           </div>
 
           <div class="filter-control">
-            <div class="filter-label-row"><span class="filter-label">LANGUAGE</span><button class="dial-reset" type="button" data-reset-filter="language" aria-label="Reset language filter">↺</button></div>
+            <div class="filter-label-row"><span class="filter-label">LANGUAGE</span><button class="dial-reset" type="button" title="Reset" data-reset-filter="language" aria-label="Reset language filter"><span aria-hidden="true">×</span></button></div>
             <div class="filter-reel" data-select="languageFilter" tabindex="0" role="spinbutton" aria-label="Language">
               <button class="reel-step reel-up" type="button" aria-label="Previous language">▲</button>
               <div class="reel-window" data-reel-window>
@@ -127,7 +127,6 @@
             </div>
             <div class="knob-label">LATITUDE</div>
             <div id="latKnobValue" class="knob-value">0.0°</div>
-            <button id="latResetBtn" class="knob-reset" type="button" aria-label="Reset latitude to zero">↺ RESET</button>
           </div>
 
           <div class="action-stack">
@@ -149,7 +148,6 @@
             </div>
             <div class="knob-label">LONGITUDE</div>
             <div id="lonKnobValue" class="knob-value">0.0°</div>
-            <button id="lonResetBtn" class="knob-reset" type="button" aria-label="Reset longitude to zero">↺ RESET</button>
           </div>
         </div>
 
