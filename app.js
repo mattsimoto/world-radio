@@ -80,7 +80,7 @@
   };
 
   const earth = new Globe(els.globe)
-    .globeImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg')
+    .globeImageUrl('https://cdn.jsdelivr.net/npm/three-globe@2.45.2/example/img/earth-blue-marble.jpg')
     .showAtmosphere(true)
     .atmosphereColor('#6db8dc')
     .atmosphereAltitude(0.13)
@@ -104,14 +104,15 @@
 
   if (!IS_MOBILE) {
     earth
-      .bumpImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png')
-      .backgroundImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png');
+      .bumpImageUrl('https://cdn.jsdelivr.net/npm/three-globe@2.45.2/example/img/earth-topology.png')
+      .backgroundImageUrl('https://cdn.jsdelivr.net/npm/three-globe@2.45.2/example/img/night-sky.png');
   } else {
     earth.backgroundColor('#050a0e');
   }
 
   try {
     earth.renderer().setPixelRatio(Math.min(window.devicePixelRatio || 1, IS_MOBILE ? 1.25 : 1.75));
+    earth.globeMaterial().color.set('#5f8293');
   } catch {}
 
   earth.controls().enablePan = false;
