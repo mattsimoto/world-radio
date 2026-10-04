@@ -37,6 +37,7 @@
     lonKnob: document.getElementById('lonKnob'),
     nearestBtn: document.getElementById('nearestBtn'),
     randomBtn: document.getElementById('randomBtn'),
+    resetBtn: document.getElementById('resetBtn'),
     genreFilter: document.getElementById('genreFilter'),
     countryFilter: document.getElementById('countryFilter'),
     cityFilter: document.getElementById('cityFilter'),
@@ -987,8 +988,44 @@
     els.audio.volume = Number(els.volume.value);
   });
 
+  async function resetTuner() {
+    ++state.currentSearchToken;
+    ++state.locationToken;
+    ++state.cityDataToken;
+    window.clearTimeout(state.filterReloadTimer);
+    window.clearTimeout(state.countryCityTimer);
+
+    destroyPlayback();
+    state.station = null;
+    state.queue = [];
+    state.queueIndex = 0;
+    state.cityTarget = null;
+
+    els.genreFilter.selectedIndex = 0;
+    els.countryFilter.selectedIndex = 0;
+    els.languageFilter.selectedIndex = 0;
+    els.cityFilter.innerHTML = '<option value="">Any city</option>';
+    els.cityFilter.disabled = true;
+    syncAllReels();
+
+    setTuning(0, 0, { animate: true });
+    earth.ringsData([]);
+    els.onAirText.textContent = 'READY TO TUNE';
+    els.stationName.textContent = 'Choose a point on Earth';
+    els.stationMeta.textContent = 'Turn the knobs, drag the globe, then find the nearest station.';
+    els.stationTags.textContent = 'Live radio · worldwide';
+    els.playerStatus.textContent = 'NO STATION SELECTED';
+    els.playerDetail.textContent = 'Radio Browser directory';
+    els.playBtn.disabled = true;
+    showFallbackArt();
+    setNotice('Tuner reset. All filters cleared and dials returned to 0° / 0°.', 'success');
+
+    await loadStationDots();
+  }
+
   els.nearestBtn.addEventListener('click', findNearest);
   els.randomBtn.addEventListener('click', findRandom);
+  els.resetBtn.addEventListener('click', resetTuner);
 
   els.genreFilter.addEventListener('change', scheduleDotReload);
   els.languageFilter.addEventListener('change', scheduleDotReload);
