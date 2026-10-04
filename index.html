@@ -37,7 +37,7 @@
           <span class="coord-divider">/</span>
           <span id="lonReadout">0.00° E</span>
         </div>
-        <div class="globe-hint">DRAG THE EARTH · TAP A DOT TO TUNE · PINCH TO ZOOM</div>
+        <div class="globe-hint">DRAG AND RELEASE TO TUNE · TAP A DOT · PINCH TO ZOOM</div>
         <a class="map-credit" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">Map © OpenStreetMap · city list ODbL</a>
       </section>
 
@@ -50,7 +50,7 @@
           <div class="station-copy">
             <div class="eyebrow"><span id="onAirDot" class="on-air-dot"></span><span id="onAirText">READY TO TUNE</span></div>
             <h1 id="stationName">Choose a point on Earth</h1>
-            <p id="stationMeta">Turn the knobs, drag the globe, then find the nearest station.</p>
+            <p id="stationMeta">Drag the globe to tune automatically, or tap a station dot.</p>
             <p id="stationTags" class="station-tags">Live radio · worldwide</p>
           </div>
         </div>
@@ -118,37 +118,15 @@
           <span>RESET TUNER</span>
         </button>
 
-        <div class="tuning-bank">
-          <div class="knob-group">
-            <div class="knob-shell">
-              <button id="latKnob" class="knob" type="button" aria-label="Latitude tuning knob" aria-valuemin="-90" aria-valuemax="90" aria-valuenow="0">
-                <span class="knob-indicator"></span>
-              </button>
-            </div>
-            <div class="knob-label">LATITUDE</div>
-            <div id="latKnobValue" class="knob-value">0.0°</div>
-          </div>
-
-          <div class="action-stack">
-            <button id="nearestBtn" class="action-button primary" type="button">
-              <span class="button-icon">⌖</span>
-              <span>NEAREST STATION</span>
-            </button>
-            <button id="randomBtn" class="action-button" type="button">
-              <span class="button-icon">↝</span>
-              <span>RANDOM STATION</span>
-            </button>
-          </div>
-
-          <div class="knob-group">
-            <div class="knob-shell">
-              <button id="lonKnob" class="knob" type="button" aria-label="Longitude tuning knob" aria-valuemin="-180" aria-valuemax="180" aria-valuenow="0">
-                <span class="knob-indicator"></span>
-              </button>
-            </div>
-            <div class="knob-label">LONGITUDE</div>
-            <div id="lonKnobValue" class="knob-value">0.0°</div>
-          </div>
+        <div class="tuning-actions">
+          <button id="nearestBtn" class="action-button primary" type="button">
+            <span class="button-icon">⌖</span>
+            <span>NEAREST STATION</span>
+          </button>
+          <button id="randomBtn" class="action-button" type="button">
+            <span class="button-icon">↝</span>
+            <span>RANDOM STATION</span>
+          </button>
         </div>
 
         <div class="player-strip">
