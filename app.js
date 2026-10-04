@@ -470,6 +470,7 @@
       index = [...select.options].findIndex(option => {
         const optionValue = normalizeChoice(option.value);
         const optionLabel = normalizeChoice(option.textContent);
+        if (!optionValue) return false;
         return wanted.some(value =>
           optionValue.includes(value) || value.includes(optionValue) ||
           optionLabel.includes(value) || value.includes(optionLabel)
