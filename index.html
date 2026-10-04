@@ -37,7 +37,8 @@
           <span class="coord-divider">/</span>
           <span id="lonReadout">0.00° E</span>
         </div>
-        <div class="globe-hint">DRAG THE EARTH · TAP A DOT TO TUNE · PINCH TO ZOOM</div>\n        <a class="map-credit" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">City data © OpenStreetMap contributors</a>
+        <div class="globe-hint">DRAG THE EARTH · TAP A DOT TO TUNE · PINCH TO ZOOM</div>
+        <a class="map-credit" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">Map © OpenStreetMap · city list ODbL</a>
       </section>
 
       <section class="control-panel">
@@ -54,19 +55,62 @@
           </div>
         </div>
 
-        <div class="filter-grid" aria-label="Station filters">
-          <label>
-            <span>GENRE</span>
-            <select id="genreFilter"><option value="">Any genre</option></select>
-          </label>
-          <label>
-            <span>COUNTRY</span>
-            <select id="countryFilter"><option value="">Any country</option></select>
-          </label>
-          <label>
-            <span>LANGUAGE</span>
-            <select id="languageFilter"><option value="">Any language</option></select>
-          </label>
+        <div class="filter-grid reel-grid" aria-label="Station filters">
+          <div class="filter-control">
+            <span class="filter-label">GENRE</span>
+            <div class="filter-reel" data-select="genreFilter" tabindex="0" role="spinbutton" aria-label="Genre">
+              <button class="reel-step reel-up" type="button" aria-label="Previous genre">▲</button>
+              <div class="reel-window" data-reel-window>
+                <div class="reel-option reel-prev"></div>
+                <div class="reel-option reel-current">Any genre</div>
+                <div class="reel-option reel-next"></div>
+              </div>
+              <button class="reel-step reel-down" type="button" aria-label="Next genre">▼</button>
+            </div>
+            <select id="genreFilter" class="native-filter" aria-label="Genre"><option value="">Any genre</option></select>
+          </div>
+
+          <div class="filter-control">
+            <span class="filter-label">COUNTRY</span>
+            <div class="filter-reel" data-select="countryFilter" tabindex="0" role="spinbutton" aria-label="Country">
+              <button class="reel-step reel-up" type="button" aria-label="Previous country">▲</button>
+              <div class="reel-window" data-reel-window>
+                <div class="reel-option reel-prev"></div>
+                <div class="reel-option reel-current">Any country</div>
+                <div class="reel-option reel-next"></div>
+              </div>
+              <button class="reel-step reel-down" type="button" aria-label="Next country">▼</button>
+            </div>
+            <select id="countryFilter" class="native-filter" aria-label="Country"><option value="">Any country</option></select>
+          </div>
+
+          <div class="filter-control">
+            <span class="filter-label">CITY</span>
+            <div class="filter-reel is-disabled" data-select="cityFilter" tabindex="0" role="spinbutton" aria-label="City" aria-disabled="true">
+              <button class="reel-step reel-up" type="button" aria-label="Previous city" disabled>▲</button>
+              <div class="reel-window" data-reel-window>
+                <div class="reel-option reel-prev"></div>
+                <div class="reel-option reel-current">Choose country</div>
+                <div class="reel-option reel-next"></div>
+              </div>
+              <button class="reel-step reel-down" type="button" aria-label="Next city" disabled>▼</button>
+            </div>
+            <select id="cityFilter" class="native-filter" aria-label="City" disabled><option value="">Any city</option></select>
+          </div>
+
+          <div class="filter-control">
+            <span class="filter-label">LANGUAGE</span>
+            <div class="filter-reel" data-select="languageFilter" tabindex="0" role="spinbutton" aria-label="Language">
+              <button class="reel-step reel-up" type="button" aria-label="Previous language">▲</button>
+              <div class="reel-window" data-reel-window>
+                <div class="reel-option reel-prev"></div>
+                <div class="reel-option reel-current">Any language</div>
+                <div class="reel-option reel-next"></div>
+              </div>
+              <button class="reel-step reel-down" type="button" aria-label="Next language">▼</button>
+            </div>
+            <select id="languageFilter" class="native-filter" aria-label="Language"><option value="">Any language</option></select>
+          </div>
         </div>
 
         <div class="tuning-bank">
