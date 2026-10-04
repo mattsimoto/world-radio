@@ -345,6 +345,8 @@
       select.addEventListener('change', sync);
       up?.addEventListener('click', () => stepReel(select, reel, -1));
       down?.addEventListener('click', () => stepReel(select, reel, 1));
+      reel.querySelector('.reel-prev')?.addEventListener('click', () => stepReel(select, reel, -1));
+      reel.querySelector('.reel-next')?.addEventListener('click', () => stepReel(select, reel, 1));
 
       reel.addEventListener('wheel', (event) => {
         if (select.disabled || Math.abs(event.deltaY) < 2) return;
