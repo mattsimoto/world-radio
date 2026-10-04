@@ -76,7 +76,12 @@
     countryCityTimer: null,
     autoTuneTimer: null,
     cityTarget: null,
-    manualFilterResets: new Set()
+    manualFilterResets: new Set(),
+    activeFilters: {
+      genre: '',
+      country: '',
+      language: ''
+    }
   };
 
   const earth = new Globe(els.globe)
@@ -155,7 +160,7 @@
     if (state.tuningFromControl) return;
     window.clearTimeout(state.autoTuneTimer);
     state.autoTuneTimer = window.setTimeout(() => {
-      findNearest({ auto: true });
+      tuneNearestVisiblePin();
     }, 120);
   });
 
@@ -236,9 +241,9 @@
     if (geo) params.set('has_geo_info', 'true');
     if (httpsOnly) params.set('is_https', 'true');
 
-    const genre = els.genreFilter.value;
-    const country = els.countryFilter.value;
-    const language = els.languageFilter.value;
+    const genre = state.activeFilters.genre;
+    const country = state.activeFilters.country;
+    const language = state.activeFilters.language;
     if (genre) params.set('tag', genre);
     if (country) params.set('countrycode', country);
     if (language) params.set('language', language);
@@ -744,9 +749,9 @@
   }
 
   function stationMatchesCurrentFilters(station) {
-    const genre = normalizeChoice(els.genreFilter.value);
-    const country = normalizeChoice(els.countryFilter.value);
-    const language = normalizeChoice(els.languageFilter.value);
+    const genre = normalizeChoice(state.activeFilters.genre);
+    const country = normalizeChoice(state.activeFilters.country);
+    const language = normalizeChoice(state.activeFilters.language);
 
     if (country && normalizeChoice(station.countrycode) !== country) return false;
     if (genre) {
@@ -770,6 +775,42 @@
       }))
       .sort((a, b) => a.distance - b.distance)
       .slice(0, limit);
+  }
+
+  function manualTuneRadiusKm() {
+    return clamp(state.altitude * 350, 260, 850);
+  }
+
+  async function tuneNearestVisiblePin() {
+    const ranked = rankNearestStations(state.dotStations, 8);
+    const nearest = ranked[0];
+    const maxDistance = manualTuneRadiusKm();
+
+    if (!nearest || nearest.distance > maxDistance) {
+      setNotice('No station pin close enough to the reticle. Globe position left unchanged.');
+      return;
+    }
+
+    const previousUuid = state.station?.stationuuid || '';
+    const nearby = ranked
+      .filter(item => item.distance <= maxDistance)
+      .sort((a, b) => {
+        const aPrevious = a.station.stationuuid === previousUuid ? 1 : 0;
+        const bPrevious = b.station.stationuuid === previousUuid ? 1 : 0;
+        if (aPrevious !== bPrevious && Math.abs(a.distance - b.distance) < 80) {
+          return aPrevious - bPrevious;
+        }
+        return a.distance - b.distance;
+      });
+
+    if (!nearby.length) {
+      setNotice('No station pin close enough to the reticle. Globe position left unchanged.');
+      return;
+    }
+
+    state.queue = nearby.map(item => ({ ...item.station, _distanceKm: item.distance }));
+    state.queueIndex = 0;
+    await tuneStation(state.queue[0], true);
   }
 
   async function findNearest({ auto = false } = {}) {
@@ -1099,6 +1140,7 @@
     state.manualFilterResets.add(kind);
 
     if (kind === 'genre') {
+      state.activeFilters.genre = '';
       resetSelectToAny(els.genreFilter);
       scheduleDotReload();
       setNotice('Genre cleared.');
@@ -1106,6 +1148,7 @@
     }
 
     if (kind === 'language') {
+      state.activeFilters.language = '';
       resetSelectToAny(els.languageFilter);
       scheduleDotReload();
       setNotice('Language cleared.');
@@ -1122,6 +1165,7 @@
     }
 
     if (kind === 'country') {
+      state.activeFilters.country = '';
       state.manualFilterResets.add('city');
       ++state.cityDataToken;
       window.clearTimeout(state.countryCityTimer);
@@ -1148,6 +1192,9 @@
     state.queueIndex = 0;
     state.cityTarget = null;
     state.manualFilterResets.clear();
+    state.activeFilters.genre = '';
+    state.activeFilters.country = '';
+    state.activeFilters.language = '';
 
     els.genreFilter.selectedIndex = 0;
     els.countryFilter.selectedIndex = 0;
@@ -1182,14 +1229,28 @@
     });
   });
 
-  els.genreFilter.addEventListener('change', scheduleDotReload);
-  els.languageFilter.addEventListener('change', scheduleDotReload);
+  els.genreFilter.addEventListener('change', () => {
+    state.activeFilters.genre = els.genreFilter.value;
+    state.manualFilterResets.delete('genre');
+    scheduleDotReload();
+  });
+  els.languageFilter.addEventListener('change', () => {
+    state.activeFilters.language = els.languageFilter.value;
+    state.manualFilterResets.delete('language');
+    scheduleDotReload();
+  });
   els.countryFilter.addEventListener('change', () => {
+    state.activeFilters.country = els.countryFilter.value;
+    state.manualFilterResets.delete('country');
+    state.manualFilterResets.delete('city');
     state.cityTarget = null;
     scheduleCountryCities();
     scheduleDotReload();
   });
-  els.cityFilter.addEventListener('change', selectCityLocation);
+  els.cityFilter.addEventListener('change', () => {
+    state.manualFilterResets.delete('city');
+    selectCityLocation();
+  });
 
   function setNotice(message, kind = '') {
     els.notice.className = `notice${kind ? ` ${kind}` : ''}`;
