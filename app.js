@@ -18,6 +18,7 @@
   const IS_MOBILE = window.matchMedia('(max-width: 620px)').matches;
   const STATION_DOT_LIMIT = IS_MOBILE ? 520 : 1400;
   const CITY_LOOKUP_INTERVAL_MS = 1100;
+  const STREAM_TIMEOUT_MS = 5000;
   const CITY_DATA_URL = 'https://cdn.jsdelivr.net/gh/srestre/world-countries-cities-db@ab77d11f438f439e3f7ed2680463cbd1f861ec15/airports/airports.json';
   let airportCities = null;
   const cityCache = new Map();
@@ -1002,7 +1003,7 @@
         state.hls.loadSource(url);
         state.hls.attachMedia(els.audio);
         await new Promise((resolve, reject) => {
-          const timer = window.setTimeout(() => reject(new Error('Stream timed out')), 9000);
+          const timer = window.setTimeout(() => reject(new Error('Stream timed out')), STREAM_TIMEOUT_MS);
           state.hls.on(Hls.Events.MANIFEST_PARSED, () => { window.clearTimeout(timer); resolve(); });
           state.hls.on(Hls.Events.ERROR, (_event, data) => {
             if (data.fatal) { window.clearTimeout(timer); reject(new Error('HLS stream failed')); }
@@ -1015,7 +1016,7 @@
       els.audio.volume = Number(els.volume.value);
       await Promise.race([
         els.audio.play(),
-        new Promise((_, reject) => window.setTimeout(() => reject(new Error('Stream timed out')), 9000))
+        new Promise((_, reject) => window.setTimeout(() => reject(new Error('Stream timed out')), STREAM_TIMEOUT_MS))
       ]);
       state.playing = true;
       els.playIcon.textContent = 'Ⅱ';
