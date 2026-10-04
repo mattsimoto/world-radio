@@ -15,8 +15,11 @@
     'talk', 'sports', 'christian'
   ];
 
-  const STATION_DOT_LIMIT = 1400;
+  const IS_MOBILE = window.matchMedia('(max-width: 620px)').matches;
+  const STATION_DOT_LIMIT = IS_MOBILE ? 520 : 1400;
   const CITY_LOOKUP_INTERVAL_MS = 1100;
+  const CITY_DATA_URL = 'https://cdn.jsdelivr.net/gh/srestre/world-countries-cities-db@ab77d11f438f439e3f7ed2680463cbd1f861ec15/airports/airports.json';
+  let airportCities = null;
   const cityCache = new Map();
   let cityLookupChain = Promise.resolve();
   let lastCityLookupAt = 0;
@@ -36,6 +39,7 @@
     randomBtn: document.getElementById('randomBtn'),
     genreFilter: document.getElementById('genreFilter'),
     countryFilter: document.getElementById('countryFilter'),
+    cityFilter: document.getElementById('cityFilter'),
     languageFilter: document.getElementById('languageFilter'),
     stationName: document.getElementById('stationName'),
     stationMeta: document.getElementById('stationMeta'),
@@ -68,13 +72,15 @@
     currentSearchToken: 0,
     dotStations: [],
     dotLoadToken: 0,
-    locationToken: 0
+    locationToken: 0,
+    cityDataToken: 0,
+    filterReloadTimer: null,
+    countryCityTimer: null,
+    cityTarget: null
   };
 
   const earth = new Globe(els.globe)
     .globeImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg')
-    .bumpImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png')
-    .backgroundImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png')
     .showAtmosphere(true)
     .atmosphereColor('#6db8dc')
     .atmosphereAltitude(0.13)
@@ -96,18 +102,41 @@
     .ringRepeatPeriod(850)
     .pointOfView({ lat: 0, lng: 0, altitude: state.altitude });
 
+  if (!IS_MOBILE) {
+    earth
+      .bumpImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png')
+      .backgroundImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png');
+  } else {
+    earth.backgroundColor('#050a0e');
+  }
+
+  try {
+    earth.renderer().setPixelRatio(Math.min(window.devicePixelRatio || 1, IS_MOBILE ? 1.25 : 1.75));
+  } catch {}
+
   earth.controls().enablePan = false;
   earth.controls().minDistance = 160;
   earth.controls().maxDistance = 500;
   earth.controls().rotateSpeed = 0.72;
   earth.controls().zoomSpeed = 0.75;
 
+  let resizeRetry = null;
   const resizeGlobe = () => {
     const rect = els.globe.getBoundingClientRect();
-    earth.width(rect.width).height(rect.height);
+    if (rect.width < 40 || rect.height < 40) {
+      window.clearTimeout(resizeRetry);
+      resizeRetry = window.setTimeout(resizeGlobe, 120);
+      return;
+    }
+    earth.width(Math.round(rect.width)).height(Math.round(rect.height));
   };
-  new ResizeObserver(resizeGlobe).observe(els.globe);
-  resizeGlobe();
+  if ('ResizeObserver' in window) {
+    new ResizeObserver(resizeGlobe).observe(els.globe);
+  } else {
+    window.addEventListener('resize', resizeGlobe);
+  }
+  window.requestAnimationFrame(resizeGlobe);
+  window.setTimeout(resizeGlobe, 180);
 
   earth.onZoom((pov) => {
     if (state.tuningFromControl) return;
@@ -283,14 +312,219 @@
         .forEach(item => addOption(els.languageFilter, item.name, titleCase(item.name)));
     } catch (error) {
       setNotice('Filters are partially loaded; station tuning still works.', 'error');
+    } finally {
+      syncAllReels();
     }
   }
 
-  function addOption(select, value, label) {
+  function addOption(select, value, label, data = null) {
     const option = document.createElement('option');
     option.value = value;
     option.textContent = label;
+    if (data) {
+      Object.entries(data).forEach(([key, val]) => { option.dataset[key] = String(val); });
+    }
     select.appendChild(option);
+  }
+
+  function initFilterReels() {
+    document.querySelectorAll('.filter-reel').forEach((reel) => {
+      if (reel.dataset.bound === 'true') return;
+      const select = document.getElementById(reel.dataset.select);
+      const windowEl = reel.querySelector('[data-reel-window]');
+      const up = reel.querySelector('.reel-up');
+      const down = reel.querySelector('.reel-down');
+      if (!select || !windowEl) return;
+
+      reel.dataset.bound = 'true';
+      let startY = 0;
+      let moved = false;
+      let lastWheelAt = 0;
+
+      const sync = () => syncReel(select, reel);
+      select.addEventListener('change', sync);
+      up?.addEventListener('click', () => stepReel(select, reel, -1));
+      down?.addEventListener('click', () => stepReel(select, reel, 1));
+
+      reel.addEventListener('wheel', (event) => {
+        if (select.disabled || Math.abs(event.deltaY) < 2) return;
+        event.preventDefault();
+        const now = performance.now();
+        if (now - lastWheelAt < 75) return;
+        lastWheelAt = now;
+        stepReel(select, reel, event.deltaY > 0 ? 1 : -1);
+      }, { passive: false });
+
+      windowEl.addEventListener('pointerdown', (event) => {
+        if (select.disabled) return;
+        startY = event.clientY;
+        moved = false;
+        windowEl.setPointerCapture(event.pointerId);
+      });
+
+      windowEl.addEventListener('pointermove', (event) => {
+        if (select.disabled || !windowEl.hasPointerCapture(event.pointerId)) return;
+        const delta = startY - event.clientY;
+        if (Math.abs(delta) < 28) return;
+        moved = true;
+        stepReel(select, reel, delta > 0 ? 1 : -1);
+        startY = event.clientY;
+      });
+
+      windowEl.addEventListener('pointerup', (event) => {
+        if (windowEl.hasPointerCapture(event.pointerId)) windowEl.releasePointerCapture(event.pointerId);
+      });
+
+      reel.addEventListener('keydown', (event) => {
+        if (select.disabled) return;
+        if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+          event.preventDefault();
+          stepReel(select, reel, -1);
+        } else if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+          event.preventDefault();
+          stepReel(select, reel, 1);
+        } else if (event.key === 'Home') {
+          event.preventDefault();
+          setReelIndex(select, reel, 0);
+        } else if (event.key === 'End') {
+          event.preventDefault();
+          setReelIndex(select, reel, select.options.length - 1);
+        }
+      });
+
+      sync();
+    });
+  }
+
+  function setReelIndex(select, reel, index) {
+    if (!select.options.length || select.disabled) return;
+    const count = select.options.length;
+    select.selectedIndex = ((index % count) + count) % count;
+    spinReel(reel);
+    syncReel(select, reel);
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function stepReel(select, reel, delta) {
+    setReelIndex(select, reel, select.selectedIndex + delta);
+  }
+
+  function spinReel(reel) {
+    reel.classList.add('is-spinning');
+    window.clearTimeout(reel._spinTimer);
+    reel._spinTimer = window.setTimeout(() => reel.classList.remove('is-spinning'), 120);
+  }
+
+  function syncReel(select, reel = document.querySelector(`.filter-reel[data-select="${select.id}"]`)) {
+    if (!reel) return;
+    const count = select.options.length;
+    const disabled = select.disabled || count === 0;
+    reel.classList.toggle('is-disabled', disabled);
+    reel.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    reel.querySelectorAll('.reel-step').forEach(button => { button.disabled = disabled; });
+
+    const current = reel.querySelector('.reel-current');
+    const prev = reel.querySelector('.reel-prev');
+    const next = reel.querySelector('.reel-next');
+    if (!count) {
+      if (current) current.textContent = 'No options';
+      if (prev) prev.textContent = '';
+      if (next) next.textContent = '';
+      return;
+    }
+
+    const index = Math.max(0, select.selectedIndex);
+    const currentOption = select.options[index];
+    const prevOption = select.options[(index - 1 + count) % count];
+    const nextOption = select.options[(index + 1) % count];
+    if (current) current.textContent = currentOption?.textContent || '';
+    if (prev) prev.textContent = count > 1 ? prevOption?.textContent || '' : '';
+    if (next) next.textContent = count > 1 ? nextOption?.textContent || '' : '';
+    reel.setAttribute('aria-valuetext', currentOption?.textContent || '');
+  }
+
+  function syncAllReels() {
+    [els.genreFilter, els.countryFilter, els.cityFilter, els.languageFilter].forEach(select => syncReel(select));
+  }
+
+  async function ensureAirportCities() {
+    if (airportCities) return airportCities;
+    const response = await fetch(CITY_DATA_URL, { headers: { Accept: 'application/json' } });
+    if (!response.ok) throw new Error('City directory unavailable');
+    airportCities = await response.json();
+    return airportCities;
+  }
+
+  async function loadCitiesForCountry(countryCode) {
+    const token = ++state.cityDataToken;
+    state.cityTarget = null;
+    els.cityFilter.disabled = true;
+    els.cityFilter.innerHTML = '<option value="">Loading cities…</option>';
+    syncReel(els.cityFilter);
+
+    if (!countryCode) {
+      els.cityFilter.innerHTML = '<option value="">Any city</option>';
+      els.cityFilter.disabled = true;
+      syncReel(els.cityFilter);
+      return;
+    }
+
+    try {
+      const airports = await ensureAirportCities();
+      if (token !== state.cityDataToken) return;
+      const unique = new Map();
+      airports.forEach((airport) => {
+        if (airport.iso_country !== countryCode || !airport.municipality) return;
+        const name = String(airport.municipality).trim();
+        if (!name) return;
+        const key = name.toLocaleLowerCase();
+        if (!unique.has(key)) unique.set(key, { name, lat: Number(airport.lat), lng: Number(airport.lng) });
+      });
+
+      const cities = [...unique.values()]
+        .filter(city => Number.isFinite(city.lat) && Number.isFinite(city.lng))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      els.cityFilter.innerHTML = '<option value="">Any city</option>';
+      cities.forEach(city => addOption(
+        els.cityFilter,
+        `${city.lat},${city.lng}`,
+        city.name,
+        { lat: city.lat, lng: city.lng }
+      ));
+      els.cityFilter.disabled = cities.length === 0;
+      syncReel(els.cityFilter);
+    } catch {
+      if (token !== state.cityDataToken) return;
+      els.cityFilter.innerHTML = '<option value="">City list unavailable</option>';
+      els.cityFilter.disabled = true;
+      syncReel(els.cityFilter);
+    }
+  }
+
+  function selectCityLocation() {
+    const option = els.cityFilter.selectedOptions[0];
+    if (!option || !option.value) {
+      state.cityTarget = null;
+      return;
+    }
+    const lat = Number(option.dataset.lat);
+    const lng = Number(option.dataset.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    state.cityTarget = { lat, lng, name: option.textContent || 'Selected city' };
+    setTuning(lat, lng, { animate: true });
+    setNotice(`Tuner centered on ${state.cityTarget.name}. Choose nearest or random station.`);
+  }
+
+  function scheduleDotReload() {
+    window.clearTimeout(state.filterReloadTimer);
+    state.filterReloadTimer = window.setTimeout(loadStationDots, 260);
+  }
+
+  function scheduleCountryCities() {
+    window.clearTimeout(state.countryCityTimer);
+    const code = els.countryFilter.value;
+    state.countryCityTimer = window.setTimeout(() => loadCitiesForCountry(code), 220);
   }
 
   function titleCase(text) {
@@ -409,13 +643,32 @@
     const token = ++state.currentSearchToken;
     setBusy(true, 'Scanning the airwaves for a random station…');
     try {
-      let stations = await apiFetch(`/json/stations/search?${queryString({ limit: 24, random: true, httpsOnly: true })}`);
+      const nearCity = Boolean(state.cityTarget);
+      const limit = nearCity ? 1800 : 24;
+      let stations = await apiFetch(`/json/stations/search?${queryString({ limit, random: !nearCity, geo: nearCity, httpsOnly: true })}`, nearCity ? 18000 : 12000);
       if (!stations.length) {
-        stations = await apiFetch(`/json/stations/search?${queryString({ limit: 24, random: true, httpsOnly: false })}`);
+        stations = await apiFetch(`/json/stations/search?${queryString({ limit, random: !nearCity, geo: nearCity, httpsOnly: false })}`, nearCity ? 18000 : 12000);
       }
       if (token !== state.currentSearchToken) return;
       if (!stations.length) throw new Error('No matching stations found.');
-      state.queue = stations.filter(isStationUsable);
+
+      if (nearCity) {
+        const ranked = stations
+          .filter(isGeoStation)
+          .map(station => ({
+            station,
+            distance: haversineKm(state.cityTarget.lat, state.cityTarget.lng, Number(station.geo_lat), Number(station.geo_long))
+          }))
+          .sort((a, b) => a.distance - b.distance)
+          .slice(0, 40);
+        if (!ranked.length) throw new Error('No geolocated stations were found near that city.');
+        const chosenIndex = Math.floor(Math.random() * ranked.length);
+        const ordered = [ranked[chosenIndex], ...ranked.filter((_, index) => index !== chosenIndex)];
+        state.queue = ordered.map(item => ({ ...item.station, _distanceKm: item.distance }));
+      } else {
+        state.queue = stations.filter(isStationUsable);
+      }
+
       state.queueIndex = 0;
       if (!state.queue.length) throw new Error('No playable matching streams were returned.');
       await tuneStation(state.queue[0], true);
@@ -735,14 +988,23 @@
   els.nearestBtn.addEventListener('click', findNearest);
   els.randomBtn.addEventListener('click', findRandom);
 
-  [els.genreFilter, els.countryFilter, els.languageFilter].forEach(select => {
-    select.addEventListener('change', loadStationDots);
+  els.genreFilter.addEventListener('change', scheduleDotReload);
+  els.languageFilter.addEventListener('change', scheduleDotReload);
+  els.countryFilter.addEventListener('change', () => {
+    state.cityTarget = null;
+    scheduleCountryCities();
+    scheduleDotReload();
   });
+  els.cityFilter.addEventListener('change', selectCityLocation);
 
   function setNotice(message, kind = '') {
     els.notice.className = `notice${kind ? ` ${kind}` : ''}`;
     els.notice.textContent = message;
   }
 
-  populateFilters().finally(loadStationDots);
+  initFilterReels();
+  populateFilters().finally(() => {
+    syncAllReels();
+    loadStationDots();
+  });
 })();
