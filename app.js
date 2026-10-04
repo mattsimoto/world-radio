@@ -35,8 +35,6 @@
     lonKnobValue: document.getElementById('lonKnobValue'),
     latKnob: document.getElementById('latKnob'),
     lonKnob: document.getElementById('lonKnob'),
-    latResetBtn: document.getElementById('latResetBtn'),
-    lonResetBtn: document.getElementById('lonResetBtn'),
     nearestBtn: document.getElementById('nearestBtn'),
     randomBtn: document.getElementById('randomBtn'),
     resetBtn: document.getElementById('resetBtn'),
@@ -79,7 +77,8 @@
     cityDataToken: 0,
     filterReloadTimer: null,
     countryCityTimer: null,
-    cityTarget: null
+    cityTarget: null,
+    manualFilterResets: new Set()
   };
 
   const earth = new Globe(els.globe)
@@ -489,7 +488,7 @@
   function syncStationFilterReels(station) {
     if (!station) return;
 
-    if (station.countrycode) {
+    if (station.countrycode && !state.manualFilterResets.has('country')) {
       selectMatchingOption(els.countryFilter, station.countrycode);
     }
 
@@ -497,7 +496,7 @@
       .split(',')
       .map(item => item.trim())
       .filter(Boolean);
-    if (stationLanguages.length) {
+    if (stationLanguages.length && !state.manualFilterResets.has('language')) {
       selectMatchingOption(els.languageFilter, stationLanguages, { fuzzy: true });
     }
 
@@ -505,16 +504,17 @@
       .split(',')
       .map(item => item.trim())
       .filter(Boolean);
-    if (stationTags.length) {
+    if (stationTags.length && !state.manualFilterResets.has('genre')) {
       selectMatchingOption(els.genreFilter, stationTags, { fuzzy: true });
     }
 
     syncAllReels();
     scheduleDotReload();
 
-    if (station.countrycode) {
+    if (station.countrycode && !state.manualFilterResets.has('country')) {
       loadCitiesForCountry(station.countrycode).then(() => {
         if (state.station?.stationuuid !== station.stationuuid) return;
+        if (state.manualFilterResets.has('city')) return;
         if (station._cityLabel) syncStationCityReel(station);
       });
     }
@@ -522,6 +522,7 @@
 
   function syncStationCityReel(station) {
     if (!station || state.station?.stationuuid !== station.stationuuid || !station._cityLabel) return;
+    if (state.manualFilterResets.has('city')) return;
     const cityName = String(station._cityLabel).trim();
     if (!cityName) return;
 
@@ -837,6 +838,7 @@
 
   async function tuneStation(station, autoplay = false) {
     state.station = station;
+    state.manualFilterResets.clear();
     const locationToken = ++state.locationToken;
 
     if (isGeoStation(station)) {
@@ -1091,41 +1093,51 @@
     els.audio.volume = Number(els.volume.value);
   });
 
+  function resetSelectToAny(select) {
+    const anyIndex = [...select.options].findIndex(option => option.value === '');
+    select.selectedIndex = anyIndex >= 0 ? anyIndex : 0;
+    const reel = document.querySelector(`.filter-reel[data-select="${select.id}"]`);
+    if (reel) spinReel(reel);
+    syncReel(select, reel);
+  }
+
   function resetFilterDial(kind) {
+    state.manualFilterResets.add(kind);
+
     if (kind === 'genre') {
-      els.genreFilter.selectedIndex = 0;
-      syncReel(els.genreFilter);
+      resetSelectToAny(els.genreFilter);
       scheduleDotReload();
-      setNotice('Genre reset to Any genre.');
+      setNotice('Genre cleared.');
       return;
     }
 
     if (kind === 'language') {
-      els.languageFilter.selectedIndex = 0;
-      syncReel(els.languageFilter);
+      resetSelectToAny(els.languageFilter);
       scheduleDotReload();
-      setNotice('Language reset to Any language.');
+      setNotice('Language cleared.');
       return;
     }
 
     if (kind === 'city') {
-      if (els.cityFilter.options.length) els.cityFilter.selectedIndex = 0;
+      ++state.cityDataToken;
+      window.clearTimeout(state.countryCityTimer);
+      resetSelectToAny(els.cityFilter);
       state.cityTarget = null;
-      syncReel(els.cityFilter);
-      setNotice('City reset to Any city.');
+      setNotice('City cleared.');
       return;
     }
 
     if (kind === 'country') {
+      state.manualFilterResets.add('city');
       ++state.cityDataToken;
-      els.countryFilter.selectedIndex = 0;
+      window.clearTimeout(state.countryCityTimer);
+      resetSelectToAny(els.countryFilter);
       state.cityTarget = null;
       els.cityFilter.innerHTML = '<option value="">Any city</option>';
       els.cityFilter.disabled = true;
-      syncReel(els.countryFilter);
       syncReel(els.cityFilter);
       scheduleDotReload();
-      setNotice('Country reset to Any country. City was cleared too.');
+      setNotice('Country and city cleared.');
     }
   }
 
@@ -1141,6 +1153,7 @@
     state.queue = [];
     state.queueIndex = 0;
     state.cityTarget = null;
+    state.manualFilterResets.clear();
 
     els.genreFilter.selectedIndex = 0;
     els.countryFilter.selectedIndex = 0;
@@ -1167,18 +1180,12 @@
   els.nearestBtn.addEventListener('click', findNearest);
   els.randomBtn.addEventListener('click', findRandom);
   els.resetBtn.addEventListener('click', resetTuner);
-  els.latResetBtn.addEventListener('click', () => {
-    setTuning(0, state.lon, { animate: true });
-    state.cityTarget = null;
-    setNotice('Latitude reset to 0°.');
-  });
-  els.lonResetBtn.addEventListener('click', () => {
-    setTuning(state.lat, 0, { animate: true });
-    state.cityTarget = null;
-    setNotice('Longitude reset to 0°.');
-  });
   document.querySelectorAll('[data-reset-filter]').forEach(button => {
-    button.addEventListener('click', () => resetFilterDial(button.dataset.resetFilter));
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      resetFilterDial(button.dataset.resetFilter);
+    });
   });
 
   els.genreFilter.addEventListener('change', scheduleDotReload);
