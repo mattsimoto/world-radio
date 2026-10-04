@@ -173,6 +173,18 @@ button { color: inherit; }
   pointer-events: none;
 }
 
+.map-credit {
+  position: absolute;
+  right: 16px;
+  bottom: 15px;
+  color: rgba(255,255,255,0.38);
+  font: 600 7px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  z-index: 3;
+}
+.map-credit:hover { color: rgba(255,255,255,0.7); }
+
 .control-panel {
   padding: 22px;
   display: flex;
@@ -396,6 +408,7 @@ select:focus { border-color: rgba(255, 138, 36, 0.72); }
   .player-strip { grid-template-columns: 48px minmax(0, 1fr); }
   .volume-control { grid-column: 1 / -1; grid-template-columns: 30px 1fr; }
   .globe-hint { bottom: 12px; font-size: 7px; }
+  .map-credit { right: 10px; bottom: 5px; font-size: 6px; }
   .coordinate-chip { top: 12px; left: 12px; font-size: 9px; }
 }
 
