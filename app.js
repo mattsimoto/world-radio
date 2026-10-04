@@ -15,6 +15,15 @@
     'talk', 'sports', 'christian'
   ];
 
+  const STATION_DOT_LIMIT = 1400;
+  const CITY_LOOKUP_INTERVAL_MS = 1100;
+  const cityCache = new Map();
+  let cityLookupChain = Promise.resolve();
+  let lastCityLookupAt = 0;
+  const regionNames = typeof Intl.DisplayNames === 'function'
+    ? new Intl.DisplayNames([navigator.language || 'en'], { type: 'region' })
+    : null;
+
   const els = {
     globe: document.getElementById('globe'),
     latReadout: document.getElementById('latReadout'),
@@ -56,7 +65,10 @@
     apiIndex: 0,
     playing: false,
     tuningFromControl: false,
-    currentSearchToken: 0
+    currentSearchToken: 0,
+    dotStations: [],
+    dotLoadToken: 0,
+    locationToken: 0
   };
 
   const earth = new Globe(els.globe)
@@ -69,9 +81,12 @@
     .showGraticules(true)
     .pointLat('lat')
     .pointLng('lng')
-    .pointAltitude(0.018)
-    .pointRadius(0.55)
-    .pointColor(() => '#ff8a24')
+    .pointAltitude(point => point.selected ? 0.04 : 0.012)
+    .pointRadius(point => point.selected ? 0.34 : stationDotRadius(point.station))
+    .pointColor(point => point.selected ? '#ff8a24' : 'rgba(244,242,233,0.82)')
+    .pointResolution(6)
+    .pointLabel(stationPointLabel)
+    .pointsTransitionDuration(220)
     .ringsData([])
     .ringLat('lat')
     .ringLng('lng')
@@ -104,6 +119,13 @@
 
   earth.onGlobeClick(({ lat, lng }) => {
     setTuning(lat, lng, { animate: true });
+  });
+
+  earth.onPointClick((point) => {
+    if (!point?.station) return;
+    state.queue = [point.station];
+    state.queueIndex = 0;
+    tuneStation(point.station, true);
   });
 
   function clamp(value, min, max) {
@@ -275,6 +297,105 @@
     return String(text).replace(/\b\w/g, char => char.toUpperCase());
   }
 
+  function escapeHtml(value = '') {
+    return String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  function stationDotRadius(station) {
+    const clicks = Number(station?.clickcount || 0);
+    return Math.max(0.055, Math.min(0.12, 0.055 + Math.log10(clicks + 1) * 0.014));
+  }
+
+  function countryDisplayName(station) {
+    if (station?._countryLabel) return station._countryLabel;
+    if (station?.country) return station.country;
+    if (!station?.countrycode) return '';
+    try { return regionNames?.of(station.countrycode) || station.countrycode; }
+    catch { return station.countrycode; }
+  }
+
+  function stationLocationLabel(station) {
+    const country = countryDisplayName(station);
+    if (station?._cityLabel && country) return `${station._cityLabel}, ${country}`;
+    return station?._cityLabel || country || '';
+  }
+
+  function stationPointLabel(point) {
+    const station = point?.station;
+    if (!station) return '';
+    const place = stationLocationLabel(station);
+    const tags = station.tags
+      ? station.tags.split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 3).map(titleCase).join(' · ')
+      : '';
+    return `
+      <div style="padding:6px 8px;max-width:240px">
+        <div style="font-weight:800;margin-bottom:3px">${escapeHtml(station.name || 'Unknown station')}</div>
+        <div style="opacity:.82">${escapeHtml(place || 'Location available when tuned')}</div>
+        ${tags ? `<div style="opacity:.65;margin-top:3px">${escapeHtml(tags)}</div>` : ''}
+      </div>
+    `;
+  }
+
+  function refreshStationDots() {
+    const selectedUuid = state.station?.stationuuid;
+    const dots = state.dotStations
+      .filter(isGeoStation)
+      .map(station => ({
+        station,
+        lat: Number(station.geo_lat),
+        lng: Number(station.geo_long),
+        selected: Boolean(selectedUuid && station.stationuuid === selectedUuid)
+      }));
+
+    if (state.station && isGeoStation(state.station) && !dots.some(point => point.selected)) {
+      dots.push({
+        station: state.station,
+        lat: Number(state.station.geo_lat),
+        lng: Number(state.station.geo_long),
+        selected: true
+      });
+    }
+
+    earth.pointsData(dots);
+
+    if (state.station && isGeoStation(state.station)) {
+      earth.ringsData([{
+        lat: Number(state.station.geo_lat),
+        lng: Number(state.station.geo_long)
+      }]);
+    } else {
+      earth.ringsData([]);
+    }
+  }
+
+  async function loadStationDots() {
+    const token = ++state.dotLoadToken;
+    try {
+      const params = queryString({ limit: STATION_DOT_LIMIT, geo: true, httpsOnly: true });
+      params.set('order', 'random');
+      let stations = await apiFetch(`/json/stations/search?${params}`, 18000);
+
+      if (!stations.length) {
+        const fallback = queryString({ limit: STATION_DOT_LIMIT, geo: true, httpsOnly: false });
+        fallback.set('order', 'random');
+        stations = await apiFetch(`/json/stations/search?${fallback}`, 18000);
+      }
+
+      if (token !== state.dotLoadToken) return;
+      state.dotStations = stations.filter(isGeoStation).slice(0, STATION_DOT_LIMIT);
+      refreshStationDots();
+    } catch (error) {
+      if (token !== state.dotLoadToken) return;
+      state.dotStations = [];
+      refreshStationDots();
+    }
+  }
+
   function setBusy(busy, message = '') {
     els.nearestBtn.disabled = busy;
     els.randomBtn.disabled = busy;
@@ -356,36 +477,26 @@
 
   async function tuneStation(station, autoplay = false) {
     state.station = station;
+    const locationToken = ++state.locationToken;
+
     if (isGeoStation(station)) {
       setTuning(Number(station.geo_lat), Number(station.geo_long), { animate: true });
-      earth.pointsData([{ lat: Number(station.geo_lat), lng: Number(station.geo_long) }]);
-      earth.ringsData([{ lat: Number(station.geo_lat), lng: Number(station.geo_long) }]);
-    } else {
-      earth.pointsData([]);
-      earth.ringsData([]);
     }
 
+    refreshStationDots();
     renderStation(station);
+    resolveStationLocation(station, locationToken);
     els.playBtn.disabled = false;
     if (autoplay) await playCurrent();
   }
 
   function renderStation(station) {
-    const meta = [
-      station.countrycode,
-      station.language ? titleCase(station.language.split(',')[0]) : '',
-      station.codec ? `${station.codec}${station.bitrate ? ` ${station.bitrate}k` : ''}` : ''
-    ].filter(Boolean);
-
     els.stationName.textContent = station.name || 'Unnamed station';
-    els.stationMeta.textContent = meta.join(' · ') || 'Live internet radio';
+    updateStationLocationDisplay(station);
     const tagText = station.tags ? station.tags.split(',').slice(0, 5).map(titleCase).join(' · ') : 'Live radio';
     els.stationTags.textContent = tagText;
     els.onAirText.textContent = 'STATION LOCKED';
     els.playerStatus.textContent = station.name || 'STATION READY';
-    els.playerDetail.textContent = station._distanceKm != null
-      ? `${formatDistance(station._distanceKm)} from tuned point`
-      : (station.homepage ? safeHostname(station.homepage) : 'Ready to play');
 
     if (station.favicon && /^https?:\/\//i.test(station.favicon)) {
       els.stationArt.src = station.favicon;
@@ -393,6 +504,76 @@
       els.stationFallback.hidden = true;
     } else {
       showFallbackArt();
+    }
+  }
+
+  function updateStationLocationDisplay(station) {
+    if (!station || state.station?.stationuuid !== station.stationuuid) return;
+    const place = stationLocationLabel(station);
+    const meta = [
+      place || 'Locating station…',
+      station.language ? titleCase(station.language.split(',')[0]) : '',
+      station.codec ? `${station.codec}${station.bitrate ? ` ${station.bitrate}k` : ''}` : ''
+    ].filter(Boolean);
+
+    els.stationMeta.textContent = meta.join(' · ') || 'Live internet radio';
+    els.playerDetail.textContent = station._distanceKm != null
+      ? `${place ? `${place} · ` : ''}${formatDistance(station._distanceKm)} from tuned point`
+      : (place || (station.homepage ? safeHostname(station.homepage) : 'Ready to play'));
+  }
+
+  function delay(ms) {
+    return new Promise(resolve => window.setTimeout(resolve, ms));
+  }
+
+  function reverseGeocode(lat, lon) {
+    const key = `${Number(lat).toFixed(4)},${Number(lon).toFixed(4)}`;
+    if (cityCache.has(key)) return Promise.resolve(cityCache.get(key));
+
+    const lookup = cityLookupChain.then(async () => {
+      if (cityCache.has(key)) return cityCache.get(key);
+      const wait = Math.max(0, CITY_LOOKUP_INTERVAL_MS - (Date.now() - lastCityLookupAt));
+      if (wait) await delay(wait);
+      lastCityLookupAt = Date.now();
+
+      const params = new URLSearchParams({
+        format: 'jsonv2',
+        lat: String(lat),
+        lon: String(lon),
+        zoom: '10',
+        addressdetails: '1',
+        'accept-language': navigator.language || 'en'
+      });
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!response.ok) throw new Error('City lookup unavailable');
+      const data = await response.json();
+      const address = data.address || {};
+      const result = {
+        city: address.city || address.town || address.village || address.municipality || address.hamlet || address.county || '',
+        country: address.country || ''
+      };
+      cityCache.set(key, result);
+      return result;
+    });
+
+    cityLookupChain = lookup.catch(() => {});
+    return lookup;
+  }
+
+  async function resolveStationLocation(station, token) {
+    if (!isGeoStation(station)) return;
+    try {
+      const place = await reverseGeocode(Number(station.geo_lat), Number(station.geo_long));
+      if (token !== state.locationToken || state.station?.stationuuid !== station.stationuuid) return;
+      if (place.city) station._cityLabel = place.city;
+      if (place.country) station._countryLabel = place.country;
+      updateStationLocationDisplay(station);
+      refreshStationDots();
+    } catch {
+      if (token !== state.locationToken || state.station?.stationuuid !== station.stationuuid) return;
+      updateStationLocationDisplay(station);
     }
   }
 
@@ -544,10 +725,14 @@
   els.nearestBtn.addEventListener('click', findNearest);
   els.randomBtn.addEventListener('click', findRandom);
 
+  [els.genreFilter, els.countryFilter, els.languageFilter].forEach(select => {
+    select.addEventListener('change', loadStationDots);
+  });
+
   function setNotice(message, kind = '') {
     els.notice.className = `notice${kind ? ` ${kind}` : ''}`;
     els.notice.textContent = message;
   }
 
-  populateFilters();
+  populateFilters().finally(loadStationDots);
 })();
