@@ -31,10 +31,6 @@
     globe: document.getElementById('globe'),
     latReadout: document.getElementById('latReadout'),
     lonReadout: document.getElementById('lonReadout'),
-    latKnobValue: document.getElementById('latKnobValue'),
-    lonKnobValue: document.getElementById('lonKnobValue'),
-    latKnob: document.getElementById('latKnob'),
-    lonKnob: document.getElementById('lonKnob'),
     nearestBtn: document.getElementById('nearestBtn'),
     randomBtn: document.getElementById('randomBtn'),
     resetBtn: document.getElementById('resetBtn'),
@@ -77,6 +73,7 @@
     cityDataToken: 0,
     filterReloadTimer: null,
     countryCityTimer: null,
+    autoTuneTimer: null,
     cityTarget: null,
     manualFilterResets: new Set()
   };
@@ -152,6 +149,14 @@
     setTuning(lat, lng, { animate: true });
   });
 
+  earth.controls().addEventListener('end', () => {
+    if (state.tuningFromControl) return;
+    window.clearTimeout(state.autoTuneTimer);
+    state.autoTuneTimer = window.setTimeout(() => {
+      findNearest({ auto: true });
+    }, 120);
+  });
+
   earth.onPointClick((point) => {
     if (!point?.station) return;
     state.queue = [point.station];
@@ -178,20 +183,9 @@
     return `${Math.abs(value).toFixed(2)}° ${value >= 0 ? 'E' : 'W'}`;
   }
 
-  function valueToRotation(value, min, max) {
-    const t = (value - min) / (max - min);
-    return -135 + (t * 270);
-  }
-
   function updateCoordinateUI() {
     els.latReadout.textContent = formatLat(state.lat);
     els.lonReadout.textContent = formatLon(state.lon);
-    els.latKnobValue.textContent = `${state.lat.toFixed(1)}°`;
-    els.lonKnobValue.textContent = `${state.lon.toFixed(1)}°`;
-    els.latKnob.style.setProperty('--rotation', `${valueToRotation(state.lat, -90, 90)}deg`);
-    els.lonKnob.style.setProperty('--rotation', `${valueToRotation(state.lon, -180, 180)}deg`);
-    els.latKnob.setAttribute('aria-valuenow', state.lat.toFixed(1));
-    els.lonKnob.setAttribute('aria-valuenow', state.lon.toFixed(1));
   }
 
   function setTuning(lat, lon, { animate = false } = {}) {
@@ -203,45 +197,8 @@
     window.setTimeout(() => { state.tuningFromControl = false; }, animate ? 540 : 20);
   }
 
-  function bindKnob(el, axis) {
-    const config = axis === 'lat'
-      ? { min: -90, max: 90, step: 0.5, get: () => state.lat, set: v => setTuning(v, state.lon) }
-      : { min: -180, max: 180, step: 1, get: () => state.lon, set: v => setTuning(state.lat, v) };
-
-    let startY = 0;
-    let startX = 0;
-    let startValue = 0;
-
-    el.addEventListener('pointerdown', (event) => {
-      el.setPointerCapture(event.pointerId);
-      startY = event.clientY;
-      startX = event.clientX;
-      startValue = config.get();
-      event.preventDefault();
-    });
-
-    el.addEventListener('pointermove', (event) => {
-      if (!el.hasPointerCapture(event.pointerId)) return;
-      const delta = (startY - event.clientY) + ((event.clientX - startX) * 0.45);
-      const value = clamp(startValue + delta * config.step, config.min, config.max);
-      config.set(value);
-    });
-
-    el.addEventListener('keydown', (event) => {
-      if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
-      event.preventDefault();
-      let next = config.get();
-      if (event.key === 'ArrowUp' || event.key === 'ArrowRight') next += config.step;
-      if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') next -= config.step;
-      if (event.key === 'Home') next = config.min;
-      if (event.key === 'End') next = config.max;
-      config.set(clamp(next, config.min, config.max));
-    });
-  }
-
-  bindKnob(els.latKnob, 'lat');
-  bindKnob(els.lonKnob, 'lon');
   updateCoordinateUI();
+
 
   async function apiFetch(path, timeoutMs = 12000) {
     let lastError;
@@ -784,36 +741,71 @@
     }
   }
 
-  async function findNearest() {
-    const token = ++state.currentSearchToken;
-    setBusy(true, 'Building a map of nearby transmitters…');
-    try {
-      const params = queryString({ limit: 25000, geo: true, httpsOnly: true });
-      params.set('order', 'clickcount');
-      params.set('reverse', 'true');
-      let stations = await apiFetch(`/json/stations/search?${params}`, 22000);
+  function stationMatchesCurrentFilters(station) {
+    const genre = normalizeChoice(els.genreFilter.value);
+    const country = normalizeChoice(els.countryFilter.value);
+    const language = normalizeChoice(els.languageFilter.value);
 
-      if (!stations.length) {
-        const fallback = queryString({ limit: 25000, geo: true, httpsOnly: false });
-        fallback.set('order', 'clickcount');
-        fallback.set('reverse', 'true');
-        stations = await apiFetch(`/json/stations/search?${fallback}`, 22000);
+    if (country && normalizeChoice(station.countrycode) !== country) return false;
+    if (genre) {
+      const tags = String(station.tags || '').split(',').map(normalizeChoice);
+      if (!tags.some(tag => tag === genre || tag.includes(genre) || genre.includes(tag))) return false;
+    }
+    if (language) {
+      const languages = String(station.language || '').split(',').map(normalizeChoice);
+      if (!languages.some(item => item === language || item.includes(language) || language.includes(item))) return false;
+    }
+    return true;
+  }
+
+  function rankNearestStations(stations, limit = 16) {
+    return stations
+      .filter(isGeoStation)
+      .filter(stationMatchesCurrentFilters)
+      .map(station => ({
+        station,
+        distance: haversineKm(state.lat, state.lon, Number(station.geo_lat), Number(station.geo_long))
+      }))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, limit);
+  }
+
+  async function findNearest({ auto = false } = {}) {
+    const token = ++state.currentSearchToken;
+    setBusy(true, auto ? 'Tuning nearest station…' : 'Finding nearest station…');
+
+    try {
+      let ranked = rankNearestStations(state.dotStations);
+
+      if (!ranked.length) {
+        const fetchLimit = IS_MOBILE ? 1400 : 3200;
+        const params = queryString({ limit: fetchLimit, geo: true, httpsOnly: true });
+        params.set('order', 'clickcount');
+        params.set('reverse', 'true');
+        let stations = await apiFetch(`/json/stations/search?${params}`, 10000);
+
+        if (!stations.length) {
+          const fallback = queryString({ limit: fetchLimit, geo: true, httpsOnly: false });
+          fallback.set('order', 'clickcount');
+          fallback.set('reverse', 'true');
+          stations = await apiFetch(`/json/stations/search?${fallback}`, 10000);
+        }
+
+        if (token !== state.currentSearchToken) return;
+        ranked = rankNearestStations(stations);
       }
 
       if (token !== state.currentSearchToken) return;
-      const ranked = stations
-        .filter(isGeoStation)
-        .map(station => ({ station, distance: haversineKm(state.lat, state.lon, Number(station.geo_lat), Number(station.geo_long)) }))
-        .sort((a, b) => a.distance - b.distance);
-
       if (!ranked.length) throw new Error('No geolocated stations matched these filters.');
-      state.queue = ranked.slice(0, 16).map(item => ({ ...item.station, _distanceKm: item.distance }));
+
+      state.queue = ranked.map(item => ({ ...item.station, _distanceKm: item.distance }));
       state.queueIndex = 0;
       await tuneStation(state.queue[0], true);
     } catch (error) {
+      if (token !== state.currentSearchToken) return;
       setNotice(error.message || 'Could not find the nearest station.', 'error');
     } finally {
-      setBusy(false);
+      if (token === state.currentSearchToken) setBusy(false);
     }
   }
 
@@ -1166,13 +1158,13 @@
     earth.ringsData([]);
     els.onAirText.textContent = 'READY TO TUNE';
     els.stationName.textContent = 'Choose a point on Earth';
-    els.stationMeta.textContent = 'Turn the knobs, drag the globe, then find the nearest station.';
+    els.stationMeta.textContent = 'Drag the globe to tune automatically, or tap a station dot.';
     els.stationTags.textContent = 'Live radio · worldwide';
     els.playerStatus.textContent = 'NO STATION SELECTED';
     els.playerDetail.textContent = 'Radio Browser directory';
     els.playBtn.disabled = true;
     showFallbackArt();
-    setNotice('Tuner reset. All filters cleared and dials returned to 0° / 0°.', 'success');
+    setNotice('Tuner reset. Filters cleared and globe returned to 0° / 0°.', 'success');
 
     await loadStationDots();
   }
