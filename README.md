@@ -9,12 +9,12 @@ Drag or swipe the Earth, use the latitude/longitude tuning knobs, then jump to t
 - Interactive 3D Earth with mouse, touch, and pinch controls, with a mobile-safe canvas and reduced mobile GPU load
 - Up to 1,400 visible, clickable radio-station dots across the globe
 - Selected stations recenter the crosshair on the resolved city and display city + country
-- Rotary latitude and longitude tuning knobs
-- Nearest-station search using station coordinates
+- Globe-release auto tuning to the nearest cached station
+- Fast nearest-station search using the already-loaded station map before any network fallback
 - Random-station discovery
 - Swipeable/wheelable radio-reel filters for genre, country, city, and language
 - Country-aware city tuning that recenters the globe before nearest/random station searches
-- Automatic stream fallback when a station fails
+- Automatic stream fallback when a station fails, with a 5-second connection timeout
 - HLS playback support through hls.js
 - Responsive layout for desktop, tablet, and mobile
 - No build step; deploy directly with GitHub Pages
