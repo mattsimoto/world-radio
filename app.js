@@ -35,6 +35,8 @@
     lonKnobValue: document.getElementById('lonKnobValue'),
     latKnob: document.getElementById('latKnob'),
     lonKnob: document.getElementById('lonKnob'),
+    latResetBtn: document.getElementById('latResetBtn'),
+    lonResetBtn: document.getElementById('lonResetBtn'),
     nearestBtn: document.getElementById('nearestBtn'),
     randomBtn: document.getElementById('randomBtn'),
     resetBtn: document.getElementById('resetBtn'),
@@ -450,6 +452,104 @@
     [els.genreFilter, els.countryFilter, els.cityFilter, els.languageFilter].forEach(select => syncReel(select));
   }
 
+  function normalizeChoice(value) {
+    return String(value || '').trim().toLocaleLowerCase();
+  }
+
+  function selectMatchingOption(select, candidates, { fuzzy = false, spin = true } = {}) {
+    const wanted = (Array.isArray(candidates) ? candidates : [candidates])
+      .map(normalizeChoice)
+      .filter(Boolean);
+    if (!wanted.length || !select.options.length) return false;
+
+    let index = [...select.options].findIndex(option => wanted.includes(normalizeChoice(option.value)));
+    if (index < 0) {
+      index = [...select.options].findIndex(option => wanted.includes(normalizeChoice(option.textContent)));
+    }
+    if (index < 0 && fuzzy) {
+      index = [...select.options].findIndex(option => {
+        const optionValue = normalizeChoice(option.value);
+        const optionLabel = normalizeChoice(option.textContent);
+        return wanted.some(value =>
+          optionValue.includes(value) || value.includes(optionValue) ||
+          optionLabel.includes(value) || value.includes(optionLabel)
+        );
+      });
+    }
+    if (index < 0) return false;
+
+    select.selectedIndex = index;
+    const reel = document.querySelector(`.filter-reel[data-select="${select.id}"]`);
+    if (spin && reel) spinReel(reel);
+    syncReel(select, reel);
+    return true;
+  }
+
+  function syncStationFilterReels(station) {
+    if (!station) return;
+
+    if (station.countrycode) {
+      selectMatchingOption(els.countryFilter, station.countrycode);
+    }
+
+    const stationLanguages = String(station.language || '')
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean);
+    if (stationLanguages.length) {
+      selectMatchingOption(els.languageFilter, stationLanguages, { fuzzy: true });
+    }
+
+    const stationTags = String(station.tags || '')
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean);
+    if (stationTags.length) {
+      selectMatchingOption(els.genreFilter, stationTags, { fuzzy: true });
+    }
+
+    syncAllReels();
+    scheduleDotReload();
+
+    if (station.countrycode) {
+      loadCitiesForCountry(station.countrycode).then(() => {
+        if (state.station?.stationuuid !== station.stationuuid) return;
+        if (station._cityLabel) syncStationCityReel(station);
+      });
+    }
+  }
+
+  function syncStationCityReel(station) {
+    if (!station || state.station?.stationuuid !== station.stationuuid || !station._cityLabel) return;
+    const cityName = String(station._cityLabel).trim();
+    if (!cityName) return;
+
+    let matched = selectMatchingOption(els.cityFilter, cityName, { fuzzy: false });
+    if (!matched) {
+      const lat = Number.isFinite(station._cityLat) ? station._cityLat : Number(station.geo_lat);
+      const lng = Number.isFinite(station._cityLon) ? station._cityLon : Number(station.geo_long);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        addOption(
+          els.cityFilter,
+          `${lat},${lng}`,
+          cityName,
+          { lat, lng, stationCity: 'true' }
+        );
+        els.cityFilter.disabled = false;
+        matched = selectMatchingOption(els.cityFilter, cityName, { fuzzy: false });
+      }
+    }
+
+    if (!matched) return;
+    const option = els.cityFilter.selectedOptions[0];
+    const lat = Number(option?.dataset.lat);
+    const lng = Number(option?.dataset.lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      state.cityTarget = { lat, lng, name: option.textContent || cityName };
+    }
+    syncReel(els.cityFilter);
+  }
+
   async function ensureAirportCities() {
     if (airportCities) return airportCities;
     const response = await fetch(CITY_DATA_URL, { headers: { Accept: 'application/json' } });
@@ -742,6 +842,7 @@
       setTuning(Number(station.geo_lat), Number(station.geo_long), { animate: true });
     }
 
+    syncStationFilterReels(station);
     refreshStationDots();
     renderStation(station);
     resolveStationLocation(station, locationToken);
@@ -836,6 +937,7 @@
         setTuning(place.lat, place.lon, { animate: true });
       }
       updateStationLocationDisplay(station);
+      syncStationCityReel(station);
       refreshStationDots();
     } catch {
       if (token !== state.locationToken || state.station?.stationuuid !== station.stationuuid) return;
@@ -988,6 +1090,44 @@
     els.audio.volume = Number(els.volume.value);
   });
 
+  function resetFilterDial(kind) {
+    if (kind === 'genre') {
+      els.genreFilter.selectedIndex = 0;
+      syncReel(els.genreFilter);
+      scheduleDotReload();
+      setNotice('Genre reset to Any genre.');
+      return;
+    }
+
+    if (kind === 'language') {
+      els.languageFilter.selectedIndex = 0;
+      syncReel(els.languageFilter);
+      scheduleDotReload();
+      setNotice('Language reset to Any language.');
+      return;
+    }
+
+    if (kind === 'city') {
+      if (els.cityFilter.options.length) els.cityFilter.selectedIndex = 0;
+      state.cityTarget = null;
+      syncReel(els.cityFilter);
+      setNotice('City reset to Any city.');
+      return;
+    }
+
+    if (kind === 'country') {
+      ++state.cityDataToken;
+      els.countryFilter.selectedIndex = 0;
+      state.cityTarget = null;
+      els.cityFilter.innerHTML = '<option value="">Any city</option>';
+      els.cityFilter.disabled = true;
+      syncReel(els.countryFilter);
+      syncReel(els.cityFilter);
+      scheduleDotReload();
+      setNotice('Country reset to Any country. City was cleared too.');
+    }
+  }
+
   async function resetTuner() {
     ++state.currentSearchToken;
     ++state.locationToken;
@@ -1026,6 +1166,19 @@
   els.nearestBtn.addEventListener('click', findNearest);
   els.randomBtn.addEventListener('click', findRandom);
   els.resetBtn.addEventListener('click', resetTuner);
+  els.latResetBtn.addEventListener('click', () => {
+    setTuning(0, state.lon, { animate: true });
+    state.cityTarget = null;
+    setNotice('Latitude reset to 0°.');
+  });
+  els.lonResetBtn.addEventListener('click', () => {
+    setTuning(state.lat, 0, { animate: true });
+    state.cityTarget = null;
+    setNotice('Longitude reset to 0°.');
+  });
+  document.querySelectorAll('[data-reset-filter]').forEach(button => {
+    button.addEventListener('click', () => resetFilterDial(button.dataset.resetFilter));
+  });
 
   els.genreFilter.addEventListener('change', scheduleDotReload);
   els.languageFilter.addEventListener('change', scheduleDotReload);
