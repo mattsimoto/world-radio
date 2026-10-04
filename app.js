@@ -345,18 +345,21 @@
     const selectedUuid = state.station?.stationuuid;
     const dots = state.dotStations
       .filter(isGeoStation)
-      .map(station => ({
-        station,
-        lat: Number(station.geo_lat),
-        lng: Number(station.geo_long),
-        selected: Boolean(selectedUuid && station.stationuuid === selectedUuid)
-      }));
+      .map(station => {
+        const selected = Boolean(selectedUuid && station.stationuuid === selectedUuid);
+        return {
+          station,
+          lat: selected && Number.isFinite(station._cityLat) ? station._cityLat : Number(station.geo_lat),
+          lng: selected && Number.isFinite(station._cityLon) ? station._cityLon : Number(station.geo_long),
+          selected
+        };
+      });
 
     if (state.station && isGeoStation(state.station) && !dots.some(point => point.selected)) {
       dots.push({
         station: state.station,
-        lat: Number(state.station.geo_lat),
-        lng: Number(state.station.geo_long),
+        lat: Number.isFinite(state.station._cityLat) ? state.station._cityLat : Number(state.station.geo_lat),
+        lng: Number.isFinite(state.station._cityLon) ? state.station._cityLon : Number(state.station.geo_long),
         selected: true
       });
     }
@@ -365,8 +368,8 @@
 
     if (state.station && isGeoStation(state.station)) {
       earth.ringsData([{
-        lat: Number(state.station.geo_lat),
-        lng: Number(state.station.geo_long)
+        lat: Number.isFinite(state.station._cityLat) ? state.station._cityLat : Number(state.station.geo_lat),
+        lng: Number.isFinite(state.station._cityLon) ? state.station._cityLon : Number(state.station.geo_long)
       }]);
     } else {
       earth.ringsData([]);
@@ -552,7 +555,9 @@
       const address = data.address || {};
       const result = {
         city: address.city || address.town || address.village || address.municipality || address.hamlet || address.county || '',
-        country: address.country || ''
+        country: address.country || '',
+        lat: Number(data.lat),
+        lon: Number(data.lon)
       };
       cityCache.set(key, result);
       return result;
@@ -569,6 +574,11 @@
       if (token !== state.locationToken || state.station?.stationuuid !== station.stationuuid) return;
       if (place.city) station._cityLabel = place.city;
       if (place.country) station._countryLabel = place.country;
+      if (Number.isFinite(place.lat) && Number.isFinite(place.lon)) {
+        station._cityLat = place.lat;
+        station._cityLon = place.lon;
+        setTuning(place.lat, place.lon, { animate: true });
+      }
       updateStationLocationDisplay(station);
       refreshStationDots();
     } catch {
