@@ -7,6 +7,8 @@ Drag or swipe the Earth, use the latitude/longitude tuning knobs, then jump to t
 ## Features
 
 - Interactive 3D Earth with mouse, touch, and pinch controls
+- Up to 1,400 visible, clickable radio-station dots across the globe
+- Selected stations recenter the crosshair on the resolved city and display city + country
 - Rotary latitude and longitude tuning knobs
 - Nearest-station search using station coordinates
 - Random-station discovery
@@ -18,7 +20,7 @@ Drag or swipe the Earth, use the latitude/longitude tuning knobs, then jump to t
 
 ## Data and libraries
 
-Station data comes from the community-maintained [Radio Browser](https://www.radio-browser.info/) directory. The globe is rendered with [Globe.GL](https://globe.gl/).
+Station data comes from the community-maintained [Radio Browser](https://www.radio-browser.info/) directory. The globe is rendered with [Globe.GL](https://globe.gl/). Selected-station city names are resolved from station coordinates with OpenStreetMap's Nominatim service, with client-side caching and rate limiting.
 
 ## Run locally
 
